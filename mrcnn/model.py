@@ -315,10 +315,13 @@ class ProposalLayer(KE.Layer):
 
         # Non-max suppression
         def nms(boxes, scores):
-            indices = tf.image.non_max_suppression(
-                boxes, scores, self.proposal_count,
-                self.nms_threshold, name="rpn_non_max_suppression")
-            proposals = tf.gather(boxes, indices)
+            try:
+                indices = tf.image.non_max_suppression(
+                    boxes, scores, self.proposal_count,
+                    self.nms_threshold, name="rpn_non_max_suppression")
+                proposals = tf.gather(boxes, indices)
+            except:
+                print('failed in ProposalLayer.close')
             # Pad if needed
             padding = tf.maximum(self.proposal_count - tf.shape(proposals)[0], 0)
             proposals = tf.pad(proposals, [(0, padding), (0, 0)])
@@ -696,37 +699,40 @@ def refine_detections_graph(rois, probs, deltas, window, config):
     Returns detections shaped: [num_detections, (y1, x1, y2, x2, class_id, score)] where
         coordinates are normalized.
     """
-    # Class IDs per ROI
-    class_ids = tf.argmax(probs, axis=1, output_type=tf.int32)
-    # Class probability of the top class of each ROI
-    indices = tf.stack([tf.range(probs.shape[0]), class_ids], axis=1)
-    class_scores = tf.gather_nd(probs, indices)
-    # Class-specific bounding box deltas
-    deltas_specific = tf.gather_nd(deltas, indices)
-    # Apply bounding box deltas
-    # Shape: [boxes, (y1, x1, y2, x2)] in normalized coordinates
-    refined_rois = apply_box_deltas_graph(
-        rois, deltas_specific * config.BBOX_STD_DEV)
-    # Clip boxes to image window
-    refined_rois = clip_boxes_graph(refined_rois, window)
+    try:
+        # Class IDs per ROI
+        class_ids = tf.argmax(probs, axis=1, output_type=tf.int32)
+        # Class probability of the top class of each ROI
+        indices = tf.stack([tf.range(probs.shape[0]), class_ids], axis=1)
+        class_scores = tf.gather_nd(probs, indices)
+        # Class-specific bounding box deltas
+        deltas_specific = tf.gather_nd(deltas, indices)
+        # Apply bounding box deltas
+        # Shape: [boxes, (y1, x1, y2, x2)] in normalized coordinates
+        refined_rois = apply_box_deltas_graph(
+            rois, deltas_specific * config.BBOX_STD_DEV)
+        # Clip boxes to image window
+        refined_rois = clip_boxes_graph(refined_rois, window)
 
-    # TODO: Filter out boxes with zero area
+        # TODO: Filter out boxes with zero area
 
-    # Filter out background boxes
-    keep = tf.where(class_ids > 0)[:, 0]
-    # Filter out low confidence boxes
-    if config.DETECTION_MIN_CONFIDENCE:
-        conf_keep = tf.where(class_scores >= config.DETECTION_MIN_CONFIDENCE)[:, 0]
-        keep = tf.sets.set_intersection(tf.expand_dims(keep, 0),
-                                        tf.expand_dims(conf_keep, 0))
-        keep = tf.sparse_tensor_to_dense(keep)[0]
+        # Filter out background boxes
+        keep = tf.where(class_ids > 0)[:, 0]
+        # Filter out low confidence boxes
+        if config.DETECTION_MIN_CONFIDENCE:
+            conf_keep = tf.where(class_scores >= config.DETECTION_MIN_CONFIDENCE)[:, 0]
+            keep = tf.sets.set_intersection(tf.expand_dims(keep, 0),
+                                            tf.expand_dims(conf_keep, 0))
+            keep = tf.sparse_tensor_to_dense(keep)[0]
 
-    # Apply per-class NMS
-    # 1. Prepare variables
-    pre_nms_class_ids = tf.gather(class_ids, keep)
-    pre_nms_scores = tf.gather(class_scores, keep)
-    pre_nms_rois = tf.gather(refined_rois,   keep)
-    unique_pre_nms_class_ids = tf.unique(pre_nms_class_ids)[0]
+        # Apply per-class NMS
+        # 1. Prepare variables
+        pre_nms_class_ids = tf.gather(class_ids, keep)
+        pre_nms_scores = tf.gather(class_scores, keep)
+        pre_nms_rois = tf.gather(refined_rois,   keep)
+        unique_pre_nms_class_ids = tf.unique(pre_nms_class_ids)[0]
+    except:
+        print('failed in refine_detections_graph')
 
     def nms_keep_map(class_id):
         """Apply Non-Maximum Suppression on ROIs of the given class."""
@@ -1026,22 +1032,25 @@ def rpn_class_loss_graph(rpn_match, rpn_class_logits):
                -1=negative, 0=neutral anchor.
     rpn_class_logits: [batch, anchors, 2]. RPN classifier logits for FG/BG.
     """
-    # Squeeze last dim to simplify
-    rpn_match = tf.squeeze(rpn_match, -1)
-    # Get anchor classes. Convert the -1/+1 match to 0/1 values.
-    anchor_class = K.cast(K.equal(rpn_match, 1), tf.int32)
-    # Positive and Negative anchors contribute to the loss,
-    # but neutral anchors (match value = 0) don't.
-    indices = tf.where(K.not_equal(rpn_match, 0))
-    # Pick rows that contribute to the loss and filter out the rest.
-    rpn_class_logits = tf.gather_nd(rpn_class_logits, indices)
-    anchor_class = tf.gather_nd(anchor_class, indices)
-    # Cross entropy loss
-    loss = K.sparse_categorical_crossentropy(target=anchor_class,
-                                             output=rpn_class_logits,
-                                             from_logits=True)
-    loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
-    return loss
+    try:
+        # Squeeze last dim to simplify
+        rpn_match = tf.squeeze(rpn_match, -1)
+        # Get anchor classes. Convert the -1/+1 match to 0/1 values.
+        anchor_class = K.cast(K.equal(rpn_match, 1), tf.int32)
+        # Positive and Negative anchors contribute to the loss,
+        # but neutral anchors (match value = 0) don't.
+        indices = tf.where(K.not_equal(rpn_match, 0))
+        # Pick rows that contribute to the loss and filter out the rest.
+        rpn_class_logits = tf.gather_nd(rpn_class_logits, indices)
+        anchor_class = tf.gather_nd(anchor_class, indices)
+        # Cross entropy loss
+        loss = K.sparse_categorical_crossentropy(target=anchor_class,
+                                                 output=rpn_class_logits,
+                                                 from_logits=True)
+        loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
+        return loss
+    except:
+        print('failed in rpn_class_loss_graph')
 
 
 def rpn_bbox_loss_graph(config, target_bbox, rpn_match, rpn_bbox):
@@ -1057,20 +1066,23 @@ def rpn_bbox_loss_graph(config, target_bbox, rpn_match, rpn_bbox):
     # Positive anchors contribute to the loss, but negative and
     # neutral anchors (match value of 0 or -1) don't.
     rpn_match = K.squeeze(rpn_match, -1)
-    indices = tf.where(K.equal(rpn_match, 1))
+    try:
+        indices = tf.where(K.equal(rpn_match, 1))
 
-    # Pick bbox deltas that contribute to the loss
-    rpn_bbox = tf.gather_nd(rpn_bbox, indices)
+        # Pick bbox deltas that contribute to the loss
+        rpn_bbox = tf.gather_nd(rpn_bbox, indices)
 
-    # Trim target bounding box deltas to the same length as rpn_bbox.
-    batch_counts = K.sum(K.cast(K.equal(rpn_match, 1), tf.int32), axis=1)
-    target_bbox = batch_pack_graph(target_bbox, batch_counts,
-                                   config.IMAGES_PER_GPU)
+        # Trim target bounding box deltas to the same length as rpn_bbox.
+        batch_counts = K.sum(K.cast(K.equal(rpn_match, 1), tf.int32), axis=1)
+        target_bbox = batch_pack_graph(target_bbox, batch_counts,
+                                       config.IMAGES_PER_GPU)
 
-    loss = smooth_l1_loss(target_bbox, rpn_bbox)
-    
-    loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
-    return loss
+        loss = smooth_l1_loss(target_bbox, rpn_bbox)
+
+        loss = K.switch(tf.size(loss) > 0, K.mean(loss), tf.constant(0.0))
+        return loss
+    except:
+        print('failed in rpn_bbox_loss_graph')
 
 
 def mrcnn_class_loss_graph(target_class_ids, pred_class_logits,
@@ -1126,18 +1138,21 @@ def mrcnn_bbox_loss_graph(target_bbox, target_class_ids, pred_bbox):
     positive_roi_ix = tf.where(target_class_ids > 0)[:, 0]
     positive_roi_class_ids = tf.cast(
         tf.gather(target_class_ids, positive_roi_ix), tf.int64)
-    indices = tf.stack([positive_roi_ix, positive_roi_class_ids], axis=1)
+    try:
+        indices = tf.stack([positive_roi_ix, positive_roi_class_ids], axis=1)
 
-    # Gather the deltas (predicted and true) that contribute to loss
-    target_bbox = tf.gather(target_bbox, positive_roi_ix)
-    pred_bbox = tf.gather_nd(pred_bbox, indices)
+        # Gather the deltas (predicted and true) that contribute to loss
+        target_bbox = tf.gather(target_bbox, positive_roi_ix)
+        pred_bbox = tf.gather_nd(pred_bbox, indices)
 
-    # Smooth-L1 Loss
-    loss = K.switch(tf.size(target_bbox) > 0,
-                    smooth_l1_loss(y_true=target_bbox, y_pred=pred_bbox),
-                    tf.constant(0.0))
-    loss = K.mean(loss)
-    return loss
+        # Smooth-L1 Loss
+        loss = K.switch(tf.size(target_bbox) > 0,
+                        smooth_l1_loss(y_true=target_bbox, y_pred=pred_bbox),
+                        tf.constant(0.0))
+        loss = K.mean(loss)
+        return loss
+    except:
+        print('failed in mrcnn_bbox_loss_graph')
 
 
 def mrcnn_mask_loss_graph(target_masks, target_class_ids, pred_masks):
@@ -1164,19 +1179,22 @@ def mrcnn_mask_loss_graph(target_masks, target_class_ids, pred_masks):
     positive_ix = tf.where(target_class_ids > 0)[:, 0]
     positive_class_ids = tf.cast(
         tf.gather(target_class_ids, positive_ix), tf.int64)
-    indices = tf.stack([positive_ix, positive_class_ids], axis=1)
+    try:
+        indices = tf.stack([positive_ix, positive_class_ids], axis=1)
 
-    # Gather the masks (predicted and true) that contribute to loss
-    y_true = tf.gather(target_masks, positive_ix)
-    y_pred = tf.gather_nd(pred_masks, indices)
+        # Gather the masks (predicted and true) that contribute to loss
+        y_true = tf.gather(target_masks, positive_ix)
+        y_pred = tf.gather_nd(pred_masks, indices)
 
-    # Compute binary cross entropy. If no positive ROIs, then return 0.
-    # shape: [batch, roi, num_classes]
-    loss = K.switch(tf.size(y_true) > 0,
-                    K.binary_crossentropy(target=y_true, output=y_pred),
-                    tf.constant(0.0))
-    loss = K.mean(loss)
-    return loss
+        # Compute binary cross entropy. If no positive ROIs, then return 0.
+        # shape: [batch, roi, num_classes]
+        loss = K.switch(tf.size(y_true) > 0,
+                        K.binary_crossentropy(target=y_true, output=y_pred),
+                        tf.constant(0.0))
+        loss = K.mean(loss)
+        return loss
+    except:
+        print('failed in mrcnn_mask_loss_graph')
 
 
 ############################################################
