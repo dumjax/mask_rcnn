@@ -273,7 +273,7 @@ class ProposalLayer(KE.Layer):
         self.nms_threshold = nms_threshold
 
     def call(self, inputs):
-        print('in ProposalLayer.close')
+        print('in ProposalLayer.call')
         # Box Scores. Use the foreground class confidence. [Batch, num_rois, 1]
         scores = inputs[0][:, :, 1]
         # Box deltas [batch, num_rois, 4]
@@ -655,6 +655,7 @@ class DetectionTargetLayer(KE.Layer):
         self.config = config
 
     def call(self, inputs):
+        print('in DetectionTargetLayer.call')
         proposals = inputs[0]
         gt_class_ids = inputs[1]
         gt_boxes = inputs[2]
@@ -804,6 +805,7 @@ class DetectionLayer(KE.Layer):
         self.config = config
 
     def call(self, inputs):
+        print('in DetectionLayer.call')
         rois = inputs[0]
         mrcnn_class = inputs[1]
         mrcnn_bbox = inputs[2]
