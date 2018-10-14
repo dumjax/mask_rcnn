@@ -273,6 +273,7 @@ class ProposalLayer(KE.Layer):
         self.nms_threshold = nms_threshold
 
     def call(self, inputs):
+        print('in ProposalLayer.close')
         # Box Scores. Use the foreground class confidence. [Batch, num_rois, 1]
         scores = inputs[0][:, :, 1]
         # Box deltas [batch, num_rois, 4]
@@ -699,6 +700,7 @@ def refine_detections_graph(rois, probs, deltas, window, config):
     Returns detections shaped: [num_detections, (y1, x1, y2, x2, class_id, score)] where
         coordinates are normalized.
     """
+    print('in refine_detections_graph')
     try:
         # Class IDs per ROI
         class_ids = tf.argmax(probs, axis=1, output_type=tf.int32)
@@ -1032,6 +1034,7 @@ def rpn_class_loss_graph(rpn_match, rpn_class_logits):
                -1=negative, 0=neutral anchor.
     rpn_class_logits: [batch, anchors, 2]. RPN classifier logits for FG/BG.
     """
+    print('in rpn_class_loss_graph')
     try:
         # Squeeze last dim to simplify
         rpn_match = tf.squeeze(rpn_match, -1)
@@ -1065,6 +1068,7 @@ def rpn_bbox_loss_graph(config, target_bbox, rpn_match, rpn_bbox):
     """
     # Positive anchors contribute to the loss, but negative and
     # neutral anchors (match value of 0 or -1) don't.
+    print('in rpn_bbox_loss_graph')
     rpn_match = K.squeeze(rpn_match, -1)
     try:
         indices = tf.where(K.equal(rpn_match, 1))
@@ -1128,6 +1132,7 @@ def mrcnn_bbox_loss_graph(target_bbox, target_class_ids, pred_bbox):
     target_class_ids: [batch, num_rois]. Integer class IDs.
     pred_bbox: [batch, num_rois, num_classes, (dy, dx, log(dh), log(dw))]
     """
+    print('in mrcnn_bbox_loss_graph')
     # Reshape to merge batch and roi dimensions for simplicity.
     target_class_ids = K.reshape(target_class_ids, (-1,))
     target_bbox = K.reshape(target_bbox, (-1, 4))
@@ -1164,6 +1169,8 @@ def mrcnn_mask_loss_graph(target_masks, target_class_ids, pred_masks):
     pred_masks: [batch, proposals, height, width, num_classes] float32 tensor
                 with values from 0 to 1.
     """
+    print('in mrcnn_mask_loss_graph')
+
     # Reshape for simplicity. Merge first two dimensions into one.
     target_class_ids = K.reshape(target_class_ids, (-1,))
     mask_shape = tf.shape(target_masks)
@@ -2379,6 +2386,7 @@ class MaskRCNN():
         else:
             workers = multiprocessing.cpu_count()
 
+        print("generating fit generator")
         self.keras_model.fit_generator(
             train_generator,
             initial_epoch=self.epoch,
