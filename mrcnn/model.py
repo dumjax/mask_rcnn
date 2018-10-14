@@ -369,6 +369,7 @@ class PyramidROIAlign(KE.Layer):
         self.pool_shape = tuple(pool_shape)
 
     def call(self, inputs):
+        print('in PyramidROIAlign.call')
         # Crop boxes [batch, num_boxes, (y1, x1, y2, x2)] in normalized coords
         boxes = inputs[0]
 
@@ -507,6 +508,7 @@ def detection_targets_graph(proposals, gt_class_ids, gt_boxes, gt_masks, config)
 
     Note: Returned arrays might be zero padded if not enough target ROIs.
     """
+    print('in detection_targets_graph')
     # Assertions
     asserts = [
         tf.Assert(tf.greater(tf.shape(proposals)[0], 0), [proposals],
@@ -738,6 +740,7 @@ def refine_detections_graph(rois, probs, deltas, window, config):
 
     def nms_keep_map(class_id):
         """Apply Non-Maximum Suppression on ROIs of the given class."""
+        print('in nms_keep_map')
         # Indices of ROIs of the given class
         ixs = tf.where(tf.equal(pre_nms_class_ids, class_id))[:, 0]
         # Apply NMS
@@ -1100,6 +1103,7 @@ def mrcnn_class_loss_graph(target_class_ids, pred_class_logits,
         classes that are in the dataset of the image, and 0
         for classes that are not in the dataset.
     """
+    print('in mrcnn_class_loss_graph')
     # During model building, Keras calls this function with
     # target_class_ids of type float32. Unclear why. Cast it
     # to int to get around it.
